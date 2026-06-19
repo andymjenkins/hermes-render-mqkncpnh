@@ -28,6 +28,19 @@ RUN chown -R hermes:hermes /opt/hermes/ui-tui /opt/hermes/node_modules \
           /opt/hermes/ui-tui/dist/entry.js \
  && chown -R hermes:hermes /opt/hermes/ui-tui
 
+# Preinstall the Hermes WhatsApp bridge during image build so gateway boot
+# does not rely on a runtime `npm install`. The bridge package depends on a
+# GitHub-pinned Baileys ref, so ensure `git` is available while npm resolves
+# dependencies, then persist Hermes' package-hash stamp so the adapter treats
+# the install as fresh and skips boot-time reinstall attempts.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends git \
+ && rm -rf /var/lib/apt/lists/* \
+ && cd /opt/hermes/scripts/whatsapp-bridge \
+ && npm install --silent \
+ && node -e "const fs=require('fs'); const crypto=require('crypto'); const pkg='package.json'; const hash=crypto.createHash('sha256').update(fs.readFileSync(pkg)).digest('hex').slice(0,16); fs.mkdirSync('node_modules',{recursive:true}); fs.writeFileSync('node_modules/.hermes-pkg-hash', hash + '\n');" \
+ && chown -R hermes:hermes /opt/hermes/scripts/whatsapp-bridge
+
 # Pull the official Render skill bundle from github.com/render-oss/skills
 # at a pinned commit. Mounted via skills.external_dirs at boot, so the
 # upstream Hermes skills-sync flow never touches these files. To upgrade,
